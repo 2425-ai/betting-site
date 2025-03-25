@@ -1,0 +1,66 @@
+const express = require('express');
+const app = express();
+const PORT = 3000;
+
+app.use(express.json());
+
+let users = {}; // 유저별 포인트 저장
+let lastClaimTime = {}; // 유저별 마지막 포인트 지급 시간
+
+const getRandomNumber = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+const addDailyPoints = (userId) => {
+    const now = new Date();
+    const lastClaim = lastClaimTime[userId] || new Date(0); // 처음엔 1970-01-01로 초기화
+    const diffInHours = Math.floor((now - lastClaim) / (1000 * 60 * 60)); // 경과 시간 (시간 단위)
+
+    if (diffInHours >= 24) {
+        users[userId] += 1000;
+        lastClaimTime[userId] = now; // 마지막 포인트 지급 시간 갱신
+        return 1000; // 추가된 포인트
+    }
+    return 0; // 포인트 추가 안 된 경우
+};
+
+app.post('/start', (req, res) => {
+    const { userId } = req.body;
+    if (!users[userId]) {
+        users[userId] = 10000; // 시작 포인트 10,000
+    }
+    
+    const addedPoints = addDailyPoints(userId); // 하루 포인트 추가 확인
+    if (addedPoints > 0) {
+        return res.json({ message: `하루 포인트 1000 추가!`, points: users[userId] });
+    }
+    res.json({ message: '게임 시작!', points: users[userId] });
+});
+
+app.post('/bet/odd-even', (req, res) => {
+    const { userId, bet, choice } = req.body;
+    if (!users[userId] || users[userId] < bet) return res.status(400).json({ message: '포인트 부족!' });
+
+    const result = getRandomNumber(1, 100) % 2 === 0 ? 'even' : 'odd';
+    if (choice === result) {
+        users[userId] += bet;
+        res.json({ message: '승리!', points: users[userId] });
+    } else {
+        users[userId] -= bet;
+        res.json({ message: '패배!', points: users[userId] });
+    }
+});
+
+app.post('/bet/number', (req, res) => {
+    const { userId, bet, number } = req.body;
+    if (!users[userId] || users[userId] < bet) return res.status(400).json({ message: '포인트 부족!' });
+
+    const systemNumber = getRandomNumber(1, 100);
+    if (number > systemNumber) {
+        users[userId] += bet;
+        res.json({ message: `승리! 시스템 숫자: ${systemNumber}`, points: users[userId] });
+    } else {
+        users[userId] -= bet;
+        res.json({ message: `패배! 시스템 숫자: ${systemNumber}`, points: users[userId] });
+    }
+});
+
+app.listen(PORT, () => console.log(`서버 실행 중: http://localhost:${PORT}`));
